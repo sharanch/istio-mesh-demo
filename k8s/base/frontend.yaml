@@ -26,7 +26,7 @@ spec:
       serviceAccountName: frontend
       containers:
       - name: frontend
-        image: ghcr.io/sharanch/istio-mesh-demo/frontend:v1.0.7
+        image: ghcr.io/sharanch/istio-mesh-demo/frontend:v1.1.0
         imagePullPolicy: Always
         env:
         - name: BACKEND_URL
