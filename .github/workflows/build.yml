@@ -1,0 +1,71 @@
+name: Build and Push Images
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+env:
+  REGISTRY: ghcr.io
+  OWNER: sharanch
+  REPO: istio-mesh-demo
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      packages: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract tag
+        id: meta
+        run: echo "TAG=${GITHUB_REF_NAME}" >> $GITHUB_OUTPUT
+
+      - name: Build and push frontend
+        uses: docker/build-push-action@v5
+        with:
+          context: services/frontend
+          push: true
+          tags: |
+            ${{ env.REGISTRY }}/${{ env.OWNER }}/${{ env.REPO }}/frontend:${{ steps.meta.outputs.TAG }}
+            ${{ env.REGISTRY }}/${{ env.OWNER }}/${{ env.REPO }}/frontend:latest
+
+      - name: Build and push backend
+        uses: docker/build-push-action@v5
+        with:
+          context: services/backend
+          push: true
+          tags: |
+            ${{ env.REGISTRY }}/${{ env.OWNER }}/${{ env.REPO }}/backend:${{ steps.meta.outputs.TAG }}
+            ${{ env.REGISTRY }}/${{ env.OWNER }}/${{ env.REPO }}/backend:latest
+
+      - name: Update manifests with GHCR image names
+        run: |
+          TAG=${{ steps.meta.outputs.TAG }}
+          FRONTEND_IMG=${{ env.REGISTRY }}/${{ env.OWNER }}/${{ env.REPO }}/frontend:${TAG}
+          BACKEND_IMG=${{ env.REGISTRY }}/${{ env.OWNER }}/${{ env.REPO }}/backend:${TAG}
+
+          sed -i "s|image: istio-mesh-demo/frontend:latest|image: ${FRONTEND_IMG}|g" k8s/base/frontend.yaml
+          sed -i "s|imagePullPolicy: Never|imagePullPolicy: Always|g" k8s/base/frontend.yaml
+
+          sed -i "s|image: istio-mesh-demo/backend:latest|image: ${BACKEND_IMG}|g" k8s/base/backend.yaml
+          sed -i "s|imagePullPolicy: Never|imagePullPolicy: Always|g" k8s/base/backend.yaml
+
+      - name: Commit updated manifests
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add k8s/base/frontend.yaml k8s/base/backend.yaml
+          git commit -m "ci: update manifests to ${{ steps.meta.outputs.TAG }} [skip ci]"
+          git push origin HEAD:main
