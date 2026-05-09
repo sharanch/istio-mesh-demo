@@ -8,6 +8,17 @@ spec:
   trafficPolicy:
     tls:
       mode: ISTIO_MUTUAL
+    connectionPool:
+      tcp:
+        maxConnections: 10
+      http:
+        http1MaxPendingRequests: 5
+        maxRequestsPerConnection: 1
+    outlierDetection:
+      consecutive5xxErrors: 3
+      interval: 10s
+      baseEjectionTime: 30s
+      maxEjectionPercent: 100
   subsets:
   - name: v1
     labels:
