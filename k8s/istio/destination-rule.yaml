@@ -15,3 +15,18 @@ spec:
   - name: v2
     labels:
       version: v2
+---
+apiVersion: networking.istio.io/v1alpha3
+kind: DestinationRule
+metadata:
+  name: redis
+  namespace: mesh-demo
+spec:
+  host: redis
+  trafficPolicy:
+    tls:
+      mode: ISTIO_MUTUAL
+    connectionPool:
+      tcp:
+        maxConnections: 5
+        connectTimeout: 3s
