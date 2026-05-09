@@ -34,3 +34,12 @@ This is how teams run true progressive delivery without scaling up replicas just
 Both services use `prometheus-fastapi-instrumentator` which auto-exposes `/metrics`
 in Prometheus format. Istio's Grafana picks these up automatically — no manual scrape
 config needed in the demo profile.
+
+## AuthorizationPolicy and zero-trust
+mTLS gives every pod a verified identity but doesn't restrict who can talk to whom.
+Without AuthorizationPolicy, any pod in the mesh with a valid cert can call any other pod.
+AuthorizationPolicy adds the access control layer — only the `frontend` service account
+is allowed to call backend, on GET requests to `/data`, `/health`, and `/metrics` only.
+This is what zero-trust actually means: identity (mTLS) plus policy (AuthorizationPolicy).
+A dedicated `frontend` ServiceAccount is created and assigned to the frontend Deployment
+so Istio can identify it by principal rather than relying on the default service account.

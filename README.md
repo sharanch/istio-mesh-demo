@@ -30,6 +30,7 @@ Each pod runs `2/2` containers: your app + an Envoy sidecar injected automatical
 | Feature | How it's demonstrated |
 |---|---|
 | **mTLS** | `PeerAuthentication` STRICT mode — verified via `openssl` in the sidecar |
+| **Authorization** | `AuthorizationPolicy` — only frontend service account can call backend |
 | **Traffic splitting** | `VirtualService` weights: 100/0 → 90/10 → 50/50 → 0/100 |
 | **Fault injection** | 5s delay on 50% of backend requests, frontend handles gracefully |
 | **Observability** | Kiali service graph, Grafana latency dashboards |
@@ -138,6 +139,26 @@ make verify-mtls
 # issuer=O = cluster.local  ← Istio's internal CA issued the cert
 ```
 
+## Zero-Trust Demo
+
+AuthorizationPolicy is applied by default on `make deploy`. Only the `frontend` service account is allowed to call backend.
+
+```bash
+# Allowed — frontend calling backend through the mesh
+curl localhost:8000/data
+
+# Blocked — pod with sidecar but wrong service account gets 403
+kubectl run curl --image=curlimages/curl -n mesh-demo \
+  --annotations="sidecar.istio.io/inject=true" \
+  -it --rm -- curl http://backend:8001/data
+
+# Toggle off/on for comparison
+make authz-disable
+make authz-enable
+```
+
+
+
 ## Observability
 
 ```bash
@@ -157,7 +178,7 @@ istio-mesh-demo/
 │   └── backend/             # FastAPI — returns versioned log samples
 ├── k8s/
 │   ├── base/                # Namespace, Deployments, Services
-│   └── istio/               # VirtualService, DestinationRule, PeerAuthentication, fault injection
+│   └── istio/               # VirtualService, DestinationRule, PeerAuthentication, AuthorizationPolicy, fault injection
 ├── docs/
 │   └── WRITEUP.md           # Design decisions and learnings
 └── Makefile                 # One-command setup and demo flows
@@ -176,6 +197,8 @@ istio-mesh-demo/
 | `make fault-inject` | Inject 5s delay into 50% of backend requests |
 | `make fault-clear` | Remove fault injection |
 | `make verify-mtls` | Confirm mTLS via openssl in the sidecar |
+| `make authz-enable` | Apply AuthorizationPolicy — only frontend can call backend |
+| `make authz-disable` | Remove AuthorizationPolicy |
 | `make port-forward` | Forward frontend to localhost:8000 |
 | `make kiali` | Open Kiali service graph dashboard |
 | `make grafana` | Open Grafana metrics dashboard |

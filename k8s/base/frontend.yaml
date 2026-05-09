@@ -1,3 +1,9 @@
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: frontend
+  namespace: mesh-demo
+---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -17,6 +23,7 @@ spec:
         app: frontend
         version: v1
     spec:
+      serviceAccountName: frontend
       containers:
       - name: frontend
         image: ghcr.io/sharanch/istio-mesh-demo/frontend:v1.0.0
