@@ -273,13 +273,91 @@ istio-mesh-demo/
 | `make canary-100` | Route 100% of traffic to backend v2 |
 | `make fault-inject` | Inject 5s delay into 50% of backend requests |
 | `make fault-clear` | Remove fault injection |
+| `make circuit-breaker` | Enable circuit breaker — ejects pod after 3 consecutive 5xx errors |
+| `make circuit-breaker-clear` | Remove circuit breaker |
+| `make retry` | Enable retry policy — up to 3 attempts with 5s per-try timeout |
+| `make retry-clear` | Remove retry policy |
+| `make mtls-strict` | Set PeerAuthentication to STRICT — plaintext rejected |
+| `make mtls-permissive` | Set PeerAuthentication to PERMISSIVE — plaintext allowed |
 | `make verify-mtls` | Confirm mTLS via openssl in the sidecar |
 | `make authz-enable` | Apply AuthorizationPolicy — only frontend can call backend |
 | `make authz-disable` | Remove AuthorizationPolicy |
 | `make port-forward` | Forward frontend to localhost:8000 |
 | `make kiali` | Open Kiali service graph dashboard |
 | `make grafana` | Open Grafana metrics dashboard |
+| `make jaeger` | Open Jaeger distributed tracing dashboard |
 | `make clean` | Delete namespace and stop minikube |
+
+## Circuit Breaker Demo
+
+```bash
+make circuit-breaker
+
+# Inject faults to trigger the breaker
+make fault-inject
+
+# Hammer the backend — after 3 consecutive 5xx the pod is ejected for 30s
+for i in $(seq 1 20); do curl -s localhost:8000/data | python3 -m json.tool; done
+
+# Watch the outlier detection in Kiali
+make kiali
+
+make circuit-breaker-clear
+make fault-clear
+```
+
+## Retry Policy Demo
+
+```bash
+# Apply retry policy (3 attempts, 5s per-try timeout)
+make retry
+
+# Combine with fault injection — retries absorb transient failures transparently
+make fault-inject
+curl -s localhost:8000/data | python3 -m json.tool
+
+make retry-clear
+make fault-clear
+```
+
+## mTLS Toggle Demo
+
+```bash
+# Switch to PERMISSIVE — plaintext traffic now allowed
+make mtls-permissive
+
+# A pod without a sidecar can now reach the backend directly
+kubectl run curl --image=curlimages/curl -n mesh-demo -it --rm   --annotations="sidecar.istio.io/inject=false"   -- curl http://backend:8001/health
+
+# Lock it back down to STRICT
+make mtls-strict
+
+# Same call now fails — no mTLS cert, connection rejected
+kubectl run curl --image=curlimages/curl -n mesh-demo -it --rm   --annotations="sidecar.istio.io/inject=false"   -- curl http://backend:8001/health
+```
+
+## Distributed Tracing
+
+Log entries store the Istio B3 trace headers captured at the backend. You can correlate a log entry directly with a Jaeger trace:
+
+```bash
+# Post a log entry
+curl -X POST http://localhost:8000/log   -H "Content-Type: application/json"   -d '{"level": "INFO", "msg": "trace this"}'
+
+# The response includes the trace context
+# {
+#   "entry": {
+#     "trace": {
+#       "x-request-id": "abc-123",
+#       "x-b3-traceid": "abc123def456",
+#       ...
+#     }
+#   }
+# }
+
+# Open Jaeger and search by trace ID
+make jaeger
+```
 
 ## Design Decisions
 

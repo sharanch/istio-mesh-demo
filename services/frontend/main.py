@@ -7,6 +7,22 @@ Instrumentator().instrument(app).expose(app)
 
 BACKEND_URL = os.getenv("BACKEND_URL", "http://backend:8001")
 
+# Istio trace headers to propagate downstream
+TRACE_HEADERS = (
+    "x-request-id",
+    "x-b3-traceid",
+    "x-b3-spanid",
+    "x-b3-parentspanid",
+    "x-b3-sampled",
+    "x-b3-flags",
+    "b3",
+)
+
+
+def propagate_headers(request: Request) -> dict:
+    """Extract trace headers from the incoming request to forward to backend."""
+    return {k: request.headers[k] for k in TRACE_HEADERS if k in request.headers}
+
 
 @app.get("/")
 async def root():
@@ -19,11 +35,14 @@ async def health():
 
 
 @app.get("/data")
-async def get_data():
+async def get_data(request: Request):
     start = time.time()
     try:
         async with httpx.AsyncClient(timeout=10.0) as client:
-            resp = await client.get(f"{BACKEND_URL}/data")
+            resp = await client.get(
+                f"{BACKEND_URL}/data",
+                headers=propagate_headers(request),
+            )
             resp.raise_for_status()
             backend_data = resp.json()
     except httpx.TimeoutException:
@@ -48,13 +67,14 @@ async def get_data():
 
 
 @app.get("/canary-split")
-async def canary_split():
+async def canary_split(request: Request):
     """Hit backend 5x — shows canary split in action."""
     results = []
+    headers = propagate_headers(request)
     async with httpx.AsyncClient(timeout=10.0) as client:
         for _ in range(5):
             try:
-                r = await client.get(f"{BACKEND_URL}/data")
+                r = await client.get(f"{BACKEND_URL}/data", headers=headers)
                 results.append(r.json())
             except Exception as e:
                 results.append({"error": str(e)})
@@ -77,11 +97,14 @@ async def _proxy_error(e: Exception, status: int, label: str) -> Response:
 
 
 @app.get("/log")
-async def get_logs():
+async def get_logs(request: Request):
     """Return all logs stored in the backend's Redis hashes."""
     try:
         async with httpx.AsyncClient(timeout=10.0) as client:
-            resp = await client.get(f"{BACKEND_URL}/log")
+            resp = await client.get(
+                f"{BACKEND_URL}/log",
+                headers=propagate_headers(request),
+            )
             resp.raise_for_status()
             return resp.json()
     except httpx.TimeoutException as e:
@@ -106,7 +129,10 @@ async def create_log(request: Request):
             resp = await client.post(
                 f"{BACKEND_URL}/log",
                 json=body,
-                headers={"Content-Type": "application/json"},
+                headers={
+                    "Content-Type": "application/json",
+                    **propagate_headers(request),
+                },
             )
             resp.raise_for_status()
             return resp.json()
@@ -117,11 +143,14 @@ async def create_log(request: Request):
 
 
 @app.delete("/log/{entry_id}")
-async def delete_log(entry_id: str):
+async def delete_log(entry_id: str, request: Request):
     """Delete a single log entry by ID."""
     try:
         async with httpx.AsyncClient(timeout=10.0) as client:
-            resp = await client.delete(f"{BACKEND_URL}/log/{entry_id}")
+            resp = await client.delete(
+                f"{BACKEND_URL}/log/{entry_id}",
+                headers=propagate_headers(request),
+            )
             resp.raise_for_status()
             return resp.json()
     except httpx.TimeoutException as e:
@@ -131,11 +160,14 @@ async def delete_log(entry_id: str):
 
 
 @app.delete("/log")
-async def clear_logs():
+async def clear_logs(request: Request):
     """Tell the backend to wipe all log entries from Redis."""
     try:
         async with httpx.AsyncClient(timeout=10.0) as client:
-            resp = await client.delete(f"{BACKEND_URL}/log")
+            resp = await client.delete(
+                f"{BACKEND_URL}/log",
+                headers=propagate_headers(request),
+            )
             resp.raise_for_status()
             return resp.json()
     except httpx.TimeoutException as e:

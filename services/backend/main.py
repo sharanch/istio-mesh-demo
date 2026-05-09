@@ -1,7 +1,8 @@
 import os, random, datetime, json, uuid
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from pydantic import BaseModel
 from prometheus_fastapi_instrumentator import Instrumentator
+from prometheus_client import Counter
 import redis
 
 app = FastAPI(title="backend-service")
@@ -11,6 +12,16 @@ VERSION = os.getenv("APP_VERSION", "v1")
 REDIS_HOST = os.getenv("REDIS_HOST", "redis")
 
 r = redis.Redis(host=REDIS_HOST, port=6379, decode_responses=True)
+
+# ── Prometheus metrics ────────────────────────────────────────────────────────
+
+logs_total = Counter(
+    "logs_total",
+    "Total log entries written, by level and version",
+    ["level", "version"],
+)
+
+# ── Sample data ───────────────────────────────────────────────────────────────
 
 SAMPLE_LOGS = [
     {"level": "INFO",  "msg": "Request processed successfully", "latency_ms": 12},
@@ -24,6 +35,22 @@ class LogEntry(BaseModel):
     level: str
     msg: str
 
+
+# ── Helpers ───────────────────────────────────────────────────────────────────
+
+def extract_trace_headers(request: Request) -> dict:
+    """Pull Istio/B3 trace headers from the incoming request."""
+    headers = request.headers
+    return {k: headers[k] for k in (
+        "x-request-id",
+        "x-b3-traceid",
+        "x-b3-spanid",
+        "x-b3-parentspanid",
+        "x-b3-sampled",
+    ) if k in headers}
+
+
+# ── Routes ────────────────────────────────────────────────────────────────────
 
 @app.get("/")
 async def root():
@@ -48,7 +75,7 @@ async def get_data():
 
 
 @app.post("/log")
-async def create_log(entry: LogEntry):
+async def create_log(entry: LogEntry, request: Request):
     entry_id = str(uuid.uuid4())
     payload = {
         "id": entry_id,
@@ -57,10 +84,11 @@ async def create_log(entry: LogEntry):
         "version": VERSION,
         "timestamp": datetime.datetime.utcnow().isoformat(),
         "pod": os.getenv("HOSTNAME", "unknown"),
+        "trace": extract_trace_headers(request),
     }
-    # store as individual hash key; also track insertion order in an index list
     r.set(f"log:{entry_id}", json.dumps(payload))
     r.rpush("log:index", entry_id)
+    logs_total.labels(level=entry.level, version=VERSION).inc()
     total = r.llen("log:index")
     return {"stored": total, "entry": payload}
 
