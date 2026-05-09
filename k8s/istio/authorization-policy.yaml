@@ -16,7 +16,7 @@ spec:
     to:
     - operation:
         methods: ["GET", "POST", "DELETE"]
-        paths: ["/data", "/health", "/metrics", "/log"]
+        paths: ["/data", "/health", "/metrics","/log", "/log/*"]
 ---
 apiVersion: security.istio.io/v1beta1
 kind: AuthorizationPolicy
