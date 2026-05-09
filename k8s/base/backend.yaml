@@ -27,7 +27,7 @@ spec:
       serviceAccountName: backend
       containers:
       - name: backend
-        image: ghcr.io/sharanch/istio-mesh-demo/backend:v1.0.4
+        image: ghcr.io/sharanch/istio-mesh-demo/backend:v1.0.6
         imagePullPolicy: Always
         env:
         - name: APP_VERSION
@@ -68,7 +68,7 @@ spec:
       serviceAccountName: backend
       containers:
       - name: backend
-        image: ghcr.io/sharanch/istio-mesh-demo/backend:v1.0.4
+        image: ghcr.io/sharanch/istio-mesh-demo/backend:v1.0.6
         imagePullPolicy: Always
         env:
         - name: APP_VERSION
