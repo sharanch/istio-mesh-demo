@@ -48,24 +48,12 @@ Each pod runs `2/2` containers: your app + an Envoy sidecar injected automatical
 
 ## Quickstart
 
-### Option A — Local minikube (no registry)
-
 ```bash
 git clone https://github.com/sharanch/istio-mesh-demo
 cd istio-mesh-demo
 
-# 1. Start minikube and install Istio
 make setup
-
-# 2. Build images into minikube's docker daemon
-#    IMPORTANT: eval must be run in the same terminal as make build
-eval $(minikube docker-env)
-make build
-
-# 3. Deploy everything
 make deploy
-
-# 4. Port-forward and test
 make port-forward
 ```
 
@@ -75,17 +63,26 @@ curl localhost:8000/data
 curl localhost:8000/retry-demo | python3 -m json.tool
 ```
 
-### Option B — Pull from GHCR (after a tagged release)
+Images are pulled from GHCR (`ghcr.io/sharanch/istio-mesh-demo`). No local build needed.
 
-After pushing a tag, the workflow builds images and updates the manifests automatically. To deploy from GHCR:
+## Local Development
+
+To build and test without pushing to GHCR, build images directly into minikube's docker daemon:
 
 ```bash
 make setup
 
-# Manifests already point to ghcr.io/sharanch/istio-mesh-demo after a tag push
-make deploy
+# Must be run in the same terminal session as make build
+eval $(minikube docker-env)
+make build
 
-make port-forward
+# Temporarily patch manifests to use local images
+kubectl set image deployment/frontend frontend=istio-mesh-demo/frontend:latest -n mesh-demo
+kubectl set image deployment/backend-v1 backend=istio-mesh-demo/backend:latest -n mesh-demo
+kubectl set image deployment/backend-v2 backend=istio-mesh-demo/backend:latest -n mesh-demo
+kubectl patch deployment frontend -n mesh-demo -p '{"spec":{"template":{"spec":{"containers":[{"name":"frontend","imagePullPolicy":"Never"}]}}}}'
+kubectl patch deployment backend-v1 -n mesh-demo -p '{"spec":{"template":{"spec":{"containers":[{"name":"backend","imagePullPolicy":"Never"}]}}}}'
+kubectl patch deployment backend-v2 -n mesh-demo -p '{"spec":{"template":{"spec":{"containers":[{"name":"backend","imagePullPolicy":"Never"}]}}}}'
 ```
 
 ## CI/CD
@@ -97,9 +94,9 @@ Pushing a version tag triggers `.github/workflows/build.yml` which:
 3. Commits the updated manifests back to `main`
 
 ```bash
-git tag v1.0.0
-git push origin v1.0.0
-# → images pushed to ghcr.io/sharanch/istio-mesh-demo/frontend:v1.0.0
+git tag v1.1.0
+git push origin v1.1.0
+# → images pushed to ghcr.io/sharanch/istio-mesh-demo/frontend:v1.1.0
 # → manifests updated and committed automatically
 ```
 
@@ -171,7 +168,7 @@ istio-mesh-demo/
 | Target | Description |
 |---|---|
 | `make setup` | Start minikube + install Istio + create namespace |
-| `make build` | Build docker images into minikube's daemon |
+| `make build` | Build docker images into minikube's daemon (local dev only) |
 | `make deploy` | Apply all k8s and Istio manifests |
 | `make canary-10` | Route 10% of traffic to backend v2 |
 | `make canary-50` | Route 50% of traffic to backend v2 |
