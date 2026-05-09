@@ -20,8 +20,8 @@ spec:
     spec:
       containers:
       - name: backend
-        image: istio-mesh-demo/backend:latest
-        imagePullPolicy: Never
+        image: ghcr.io/sharanch/istio-mesh-demo/backend:v1.0.0
+        imagePullPolicy: Always
         env:
         - name: APP_VERSION
           value: "v1"
@@ -58,8 +58,8 @@ spec:
     spec:
       containers:
       - name: backend
-        image: istio-mesh-demo/backend:latest
-        imagePullPolicy: Never
+        image: ghcr.io/sharanch/istio-mesh-demo/backend:v1.0.0
+        imagePullPolicy: Always
         env:
         - name: APP_VERSION
           value: "v2"
