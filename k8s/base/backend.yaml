@@ -1,0 +1,88 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: backend-v1
+  namespace: mesh-demo
+  labels:
+    app: backend
+    version: v1
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: backend
+      version: v1
+  template:
+    metadata:
+      labels:
+        app: backend
+        version: v1
+    spec:
+      containers:
+      - name: backend
+        image: istio-mesh-demo/backend:latest
+        imagePullPolicy: Never
+        env:
+        - name: APP_VERSION
+          value: "v1"
+        ports:
+        - containerPort: 8001
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 8001
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8001
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: backend-v2
+  namespace: mesh-demo
+  labels:
+    app: backend
+    version: v2
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: backend
+      version: v2
+  template:
+    metadata:
+      labels:
+        app: backend
+        version: v2
+    spec:
+      containers:
+      - name: backend
+        image: istio-mesh-demo/backend:latest
+        imagePullPolicy: Never
+        env:
+        - name: APP_VERSION
+          value: "v2"
+        ports:
+        - containerPort: 8001
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 8001
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8001
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: backend
+  namespace: mesh-demo
+spec:
+  selector:
+    app: backend
+  ports:
+  - port: 8001
+    targetPort: 8001
+    name: http
