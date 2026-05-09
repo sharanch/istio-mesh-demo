@@ -15,6 +15,10 @@ A hands-on Istio service mesh project demonstrating production-grade traffic man
 │  └──────────────┘      └──────────────────┘ │
 │        │                       │            │
 │   envoy sidecar           envoy sidecar     │
+│                                │            │
+│                         ┌──────▼──────┐     │
+│                         │    Redis    │     │
+│                         └─────────────┘     │
 └─────────────────────────────────────────────┘
               │           │
          ┌────▼───────────▼────┐
@@ -91,7 +95,7 @@ kubectl patch deployment backend-v2 -n mesh-demo -p '{"spec":{"template":{"spec"
 Pushing a version tag triggers `.github/workflows/build.yml` which:
 
 1. Builds `frontend` and `backend` images and pushes to GHCR with the tag version and `latest`
-2. Updates `k8s/base/frontend.yaml` and `k8s/base/backend.yaml` to reference the new GHCR image and sets `imagePullPolicy: Always`
+2. Updates `k8s/base/frontend.yaml` and `k8s/base/backend.yaml` to reference the new GHCR image tag
 3. Commits the updated manifests back to `main`
 
 ```bash
@@ -157,7 +161,72 @@ make authz-disable
 make authz-enable
 ```
 
+## Log API
 
+The frontend exposes a `/log` passthrough that routes through the mesh to the backend, which persists entries in Redis. Redis is not directly reachable from outside the cluster — all access goes through the service chain.
+
+```bash
+# make sure port-forward is running first
+make port-forward
+```
+
+**POST** a log entry:
+```bash
+curl -X POST http://localhost:8000/log \
+  -H "Content-Type: application/json" \
+  -d '{"level": "INFO", "msg": "hello from curl"}'
+```
+```json
+{
+  "stored": 1,
+  "entry": {
+    "level": "INFO",
+    "msg": "hello from curl",
+    "version": "v1",
+    "timestamp": "2026-05-09T09:47:49.508430",
+    "pod": "backend-v1-d798ffdf7-zn8df"
+  }
+}
+```
+
+**GET** all stored logs:
+```bash
+curl http://localhost:8000/log
+```
+```json
+{
+  "logs": [
+    {
+      "level": "INFO",
+      "msg": "hello from curl",
+      "version": "v1",
+      "timestamp": "2026-05-09T09:47:49.508430",
+      "pod": "backend-v1-d798ffdf7-zn8df"
+    }
+  ],
+  "total": 1
+}
+```
+
+**DELETE** all logs:
+```bash
+curl -X DELETE http://localhost:8000/log
+```
+```json
+{"status": "cleared"}
+```
+
+To inspect Redis directly (cluster-internal only):
+```bash
+kubectl exec -n mesh-demo deploy/redis -- redis-cli LRANGE logs 0 -1
+```
+
+**Scaling behaviour:** all backend replicas write to the same Redis list, so log entries are preserved regardless of which pod handles the request. The `pod` field in each entry tells you exactly which replica wrote it — useful when running the canary demo, where you'll see both v1 and v2 pods appearing across entries:
+
+```json
+{"level": "INFO", "msg": "hello", "version": "v1", "pod": "backend-v1-d798ffdf7-zn8df"}
+{"level": "INFO", "msg": "hello", "version": "v2", "pod": "backend-v2-686c747854-fsmmm"}
+```
 
 ## Observability
 
@@ -174,8 +243,8 @@ istio-mesh-demo/
 │   └── workflows/
 │       └── build.yml        # Build + push to GHCR on tag, auto-update manifests
 ├── services/
-│   ├── frontend/            # FastAPI — calls backend, exposes /data and /canary-split
-│   └── backend/             # FastAPI — returns versioned log samples
+│   ├── frontend/            # FastAPI — calls backend, exposes /data, /canary-split, /log
+│   └── backend/             # FastAPI + Redis — stores and serves log entries
 ├── k8s/
 │   ├── base/                # Namespace, Deployments, Services
 │   └── istio/               # VirtualService, DestinationRule, PeerAuthentication, AuthorizationPolicy, fault injection
