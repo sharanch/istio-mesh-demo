@@ -15,5 +15,21 @@ spec:
         - cluster.local/ns/mesh-demo/sa/frontend
     to:
     - operation:
-        methods: ["GET"]
-        paths: ["/data", "/health", "/metrics"]
+        methods: ["GET", "POST", "DELETE"]
+        paths: ["/data", "/health", "/metrics", "/log"]
+---
+apiVersion: security.istio.io/v1beta1
+kind: AuthorizationPolicy
+metadata:
+  name: redis-allow-backend-only
+  namespace: mesh-demo
+spec:
+  selector:
+    matchLabels:
+      app: redis
+  action: ALLOW
+  rules:
+  - from:
+    - source:
+        principals:
+        - cluster.local/ns/mesh-demo/sa/backend

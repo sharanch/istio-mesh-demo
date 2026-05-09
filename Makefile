@@ -23,6 +23,7 @@ deploy:
 	kubectl label namespace $(NAMESPACE) istio-injection=enabled --overwrite
 	kubectl wait --for=jsonpath='{.status.phase}'=Active namespace/$(NAMESPACE) --timeout=30s
 	kubectl apply -f k8s/base/backend.yaml
+	kubectl apply -f k8s/base/redis.yaml
 	kubectl apply -f k8s/base/frontend.yaml
 	kubectl apply -f k8s/istio/peer-authentication.yaml
 	kubectl apply -f k8s/istio/destination-rule.yaml
@@ -31,6 +32,7 @@ deploy:
 	kubectl rollout status deployment/frontend -n $(NAMESPACE)
 	kubectl rollout status deployment/backend-v1 -n $(NAMESPACE)
 	kubectl rollout status deployment/backend-v2 -n $(NAMESPACE)
+	kubectl rollout status deployment/redis -n $(NAMESPACE)
 
 canary-10:
 	kubectl apply -f k8s/istio/virtual-service-canary-10.yaml
