@@ -47,8 +47,8 @@ async def get_data():
     }
 
 
-@app.get("/retry-demo")
-async def retry_demo():
+@app.get("/canary-split")
+async def canary_split():
     """Hit backend 5x — shows canary split in action."""
     results = []
     async with httpx.AsyncClient(timeout=10.0) as client:

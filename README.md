@@ -60,7 +60,7 @@ make port-forward
 In another terminal:
 ```bash
 curl localhost:8000/data
-curl localhost:8000/retry-demo | python3 -m json.tool
+curl localhost:8000/canary-split | python3 -m json.tool
 ```
 
 Images are pulled from GHCR (`ghcr.io/sharanch/istio-mesh-demo`). No local build needed.
@@ -104,7 +104,7 @@ git push origin v1.1.0
 
 ```bash
 # Watch traffic split in real time
-watch -n1 "curl -s localhost:8000/retry-demo | python3 -m json.tool"
+watch -n1 "curl -s localhost:8000/canary-split | python3 -m json.tool"
 
 # In another terminal, progressively shift traffic
 make canary-10   # 90% v1 / 10% v2
@@ -153,7 +153,7 @@ istio-mesh-demo/
 │   └── workflows/
 │       └── build.yml        # Build + push to GHCR on tag, auto-update manifests
 ├── services/
-│   ├── frontend/            # FastAPI — calls backend, exposes /data and /retry-demo
+│   ├── frontend/            # FastAPI — calls backend, exposes /data and /canary-split
 │   └── backend/             # FastAPI — returns versioned log samples
 ├── k8s/
 │   ├── base/                # Namespace, Deployments, Services
