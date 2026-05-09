@@ -1,0 +1,19 @@
+apiVersion: security.istio.io/v1beta1
+kind: AuthorizationPolicy
+metadata:
+  name: backend-allow-frontend-only
+  namespace: mesh-demo
+spec:
+  selector:
+    matchLabels:
+      app: backend
+  action: ALLOW
+  rules:
+  - from:
+    - source:
+        principals:
+        - cluster.local/ns/mesh-demo/sa/frontend
+    to:
+    - operation:
+        methods: ["GET"]
+        paths: ["/data", "/health", "/metrics"]

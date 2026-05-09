@@ -2,7 +2,7 @@ NAMESPACE=mesh-demo
 FRONTEND_IMG=istio-mesh-demo/frontend:latest
 BACKEND_IMG=istio-mesh-demo/backend:latest
 
-.PHONY: all setup build deploy canary-10 canary-50 canary-100 fault-inject fault-clear verify-mtls port-forward kiali grafana clean
+.PHONY: all setup build deploy canary-10 canary-50 canary-100 fault-inject fault-clear verify-mtls port-forward kiali grafana clean authz-enable authz-disable
 
 all: setup build deploy
 
@@ -27,6 +27,7 @@ deploy:
 	kubectl apply -f k8s/istio/peer-authentication.yaml
 	kubectl apply -f k8s/istio/destination-rule.yaml
 	kubectl apply -f k8s/istio/virtual-service-100-v1.yaml
+	kubectl apply -f k8s/istio/authorization-policy.yaml
 	kubectl rollout status deployment/frontend -n $(NAMESPACE)
 	kubectl rollout status deployment/backend-v1 -n $(NAMESPACE)
 	kubectl rollout status deployment/backend-v2 -n $(NAMESPACE)
@@ -63,6 +64,14 @@ kiali:
 
 grafana:
 	istioctl dashboard grafana
+
+authz-enable:
+	kubectl apply -f k8s/istio/authorization-policy.yaml
+	@echo "AuthorizationPolicy applied — only frontend can call backend"
+
+authz-disable:
+	kubectl delete -f k8s/istio/authorization-policy.yaml
+	@echo "AuthorizationPolicy removed"
 
 clean:
 	kubectl delete namespace $(NAMESPACE)
