@@ -33,6 +33,7 @@ Each pod runs `2/2` containers: your app + an Envoy sidecar injected automatical
 | **Traffic splitting** | `VirtualService` weights: 100/0 → 90/10 → 50/50 → 0/100 |
 | **Fault injection** | 5s delay on 50% of backend requests, frontend handles gracefully |
 | **Observability** | Kiali service graph, Grafana latency dashboards |
+| **CI/CD** | GitHub Actions builds and pushes images to GHCR on tag push, auto-updates manifests |
 
 ## Prerequisites
 
@@ -47,6 +48,8 @@ Each pod runs `2/2` containers: your app + an Envoy sidecar injected automatical
 
 ## Quickstart
 
+### Option A — Local minikube (no registry)
+
 ```bash
 git clone https://github.com/sharanch/istio-mesh-demo
 cd istio-mesh-demo
@@ -54,7 +57,8 @@ cd istio-mesh-demo
 # 1. Start minikube and install Istio
 make setup
 
-# 2. Build images into minikube's docker daemon (IMPORTANT: must be in the same terminal)
+# 2. Build images into minikube's docker daemon
+#    IMPORTANT: eval must be run in the same terminal as make build
 eval $(minikube docker-env)
 make build
 
@@ -71,7 +75,33 @@ curl localhost:8000/data
 curl localhost:8000/retry-demo | python3 -m json.tool
 ```
 
-> **Note:** `eval $(minikube docker-env)` must be run before `make build` in the same terminal session. It points your docker CLI at minikube's internal daemon so images are available inside the cluster without pushing to a registry.
+### Option B — Pull from GHCR (after a tagged release)
+
+After pushing a tag, the workflow builds images and updates the manifests automatically. To deploy from GHCR:
+
+```bash
+make setup
+
+# Manifests already point to ghcr.io/sharanch/istio-mesh-demo after a tag push
+make deploy
+
+make port-forward
+```
+
+## CI/CD
+
+Pushing a version tag triggers `.github/workflows/build.yml` which:
+
+1. Builds `frontend` and `backend` images and pushes to GHCR with the tag version and `latest`
+2. Updates `k8s/base/frontend.yaml` and `k8s/base/backend.yaml` to reference the new GHCR image and sets `imagePullPolicy: Always`
+3. Commits the updated manifests back to `main`
+
+```bash
+git tag v1.0.0
+git push origin v1.0.0
+# → images pushed to ghcr.io/sharanch/istio-mesh-demo/frontend:v1.0.0
+# → manifests updated and committed automatically
+```
 
 ## Canary Deployment Demo
 
@@ -81,7 +111,7 @@ watch -n1 "curl -s localhost:8000/retry-demo | python3 -m json.tool"
 
 # In another terminal, progressively shift traffic
 make canary-10   # 90% v1 / 10% v2
-make canary-50   # 50% v1 / 50% v2  ← versions_seen will show a mix
+make canary-50   # 50% v1 / 50% v2
 make canary-100  # 100% v2
 ```
 
@@ -96,13 +126,11 @@ Example output at 50/50:
 ## Fault Injection Demo
 
 ```bash
-# Inject 5s delay into 50% of backend requests
 make fault-inject
 
-# Some calls will be fast, some will take ~5s and return 504
+# Some calls fast, some ~5s and return 504
 curl -s localhost:8000/data | python3 -m json.tool
 
-# Clear the fault
 make fault-clear
 ```
 
@@ -111,7 +139,6 @@ make fault-clear
 ```bash
 make verify-mtls
 # issuer=O = cluster.local  ← Istio's internal CA issued the cert
-# All traffic between services is mutually authenticated
 ```
 
 ## Observability
@@ -125,15 +152,18 @@ make grafana  # Latency, error rate, RPS dashboards
 
 ```
 istio-mesh-demo/
+├── .github/
+│   └── workflows/
+│       └── build.yml        # Build + push to GHCR on tag, auto-update manifests
 ├── services/
-│   ├── frontend/        # FastAPI — calls backend, exposes /data and /retry-demo
-│   └── backend/         # FastAPI — returns versioned log samples
+│   ├── frontend/            # FastAPI — calls backend, exposes /data and /retry-demo
+│   └── backend/             # FastAPI — returns versioned log samples
 ├── k8s/
-│   ├── base/            # Namespace, Deployments, Services
-│   └── istio/           # VirtualService, DestinationRule, PeerAuthentication, fault injection
+│   ├── base/                # Namespace, Deployments, Services
+│   └── istio/               # VirtualService, DestinationRule, PeerAuthentication, fault injection
 ├── docs/
-│   └── WRITEUP.md       # Design decisions and learnings
-└── Makefile             # One-command setup and demo flows
+│   └── WRITEUP.md           # Design decisions and learnings
+└── Makefile                 # One-command setup and demo flows
 ```
 
 ## Makefile Reference
