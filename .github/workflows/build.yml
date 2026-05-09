@@ -52,17 +52,14 @@ jobs:
             ${{ env.REGISTRY }}/${{ env.OWNER }}/${{ env.REPO }}/backend:${{ steps.meta.outputs.TAG }}
             ${{ env.REGISTRY }}/${{ env.OWNER }}/${{ env.REPO }}/backend:latest
 
-      - name: Update manifests with GHCR image names
+      - name: Update manifests with new image tags
         run: |
           TAG=${{ steps.meta.outputs.TAG }}
           FRONTEND_IMG=${{ env.REGISTRY }}/${{ env.OWNER }}/${{ env.REPO }}/frontend:${TAG}
           BACKEND_IMG=${{ env.REGISTRY }}/${{ env.OWNER }}/${{ env.REPO }}/backend:${TAG}
 
-          sed -i "s|image: istio-mesh-demo/frontend:latest|image: ${FRONTEND_IMG}|g" k8s/base/frontend.yaml
-          sed -i "s|imagePullPolicy: Never|imagePullPolicy: Always|g" k8s/base/frontend.yaml
-
-          sed -i "s|image: istio-mesh-demo/backend:latest|image: ${BACKEND_IMG}|g" k8s/base/backend.yaml
-          sed -i "s|imagePullPolicy: Never|imagePullPolicy: Always|g" k8s/base/backend.yaml
+          sed -i "s|image: ghcr.io/${{ env.OWNER }}/${{ env.REPO }}/frontend:.*|image: ${FRONTEND_IMG}|g" k8s/base/frontend.yaml
+          sed -i "s|image: ghcr.io/${{ env.OWNER }}/${{ env.REPO }}/backend:.*|image: ${BACKEND_IMG}|g" k8s/base/backend.yaml
 
       - name: Commit updated manifests
         run: |
