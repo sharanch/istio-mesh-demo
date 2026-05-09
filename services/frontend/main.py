@@ -7,13 +7,16 @@ Instrumentator().instrument(app).expose(app)
 
 BACKEND_URL = os.getenv("BACKEND_URL", "http://backend:8001")
 
+
 @app.get("/")
 async def root():
     return {"service": "frontend", "version": "v1"}
 
+
 @app.get("/health")
 async def health():
     return {"status": "ok"}
+
 
 @app.get("/data")
 async def get_data():
@@ -43,6 +46,7 @@ async def get_data():
         "backend": backend_data,
     }
 
+
 @app.get("/canary-split")
 async def canary_split():
     """Hit backend 5x — shows canary split in action."""
@@ -71,9 +75,10 @@ async def _proxy_error(e: Exception, status: int, label: str) -> Response:
         media_type="application/json",
     )
 
+
 @app.get("/log")
 async def get_logs():
-    """Return all logs stored in the backend's Redis list."""
+    """Return all logs stored in the backend's Redis hashes."""
     try:
         async with httpx.AsyncClient(timeout=10.0) as client:
             resp = await client.get(f"{BACKEND_URL}/log")
@@ -83,6 +88,7 @@ async def get_logs():
         return await _proxy_error(e, 504, "backend timeout")
     except httpx.HTTPError as e:
         return await _proxy_error(e, 502, "backend error")
+
 
 @app.post("/log")
 async def create_log(request: Request):
@@ -109,9 +115,24 @@ async def create_log(request: Request):
     except httpx.HTTPError as e:
         return await _proxy_error(e, 502, "backend error")
 
+
+@app.delete("/log/{entry_id}")
+async def delete_log(entry_id: str):
+    """Delete a single log entry by ID."""
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            resp = await client.delete(f"{BACKEND_URL}/log/{entry_id}")
+            resp.raise_for_status()
+            return resp.json()
+    except httpx.TimeoutException as e:
+        return await _proxy_error(e, 504, "backend timeout")
+    except httpx.HTTPError as e:
+        return await _proxy_error(e, 502, "backend error")
+
+
 @app.delete("/log")
 async def clear_logs():
-    """Tell the backend to wipe the Redis log list."""
+    """Tell the backend to wipe all log entries from Redis."""
     try:
         async with httpx.AsyncClient(timeout=10.0) as client:
             resp = await client.delete(f"{BACKEND_URL}/log")

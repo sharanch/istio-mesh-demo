@@ -208,6 +208,14 @@ curl http://localhost:8000/log
 }
 ```
 
+**DELETE** a single log entry by ID:
+```bash
+curl -X DELETE http://localhost:8000/log/f47ac10b-58cc-4372-a567-0e02b2c3d479
+```
+```json
+{"deleted": "f47ac10b-58cc-4372-a567-0e02b2c3d479"}
+```
+
 **DELETE** all logs:
 ```bash
 curl -X DELETE http://localhost:8000/log
@@ -218,14 +226,14 @@ curl -X DELETE http://localhost:8000/log
 
 To inspect Redis directly (cluster-internal only):
 ```bash
-kubectl exec -n mesh-demo deploy/redis -- redis-cli LRANGE logs 0 -1
+kubectl exec -n mesh-demo deploy/redis -- redis-cli KEYS "log:*"
 ```
 
-**Scaling behaviour:** all backend replicas write to the same Redis list, so log entries are preserved regardless of which pod handles the request. The `pod` field in each entry tells you exactly which replica wrote it — useful when running the canary demo, where you'll see both v1 and v2 pods appearing across entries:
+**Scaling behaviour:** each log entry is stored as an individual Redis key (`log:<uuid>`) with a separate index list tracking insertion order. All backend replicas write to the same Redis instance, so entries are stable and addressable by ID regardless of which pod handles the request. The `pod` field in each entry tells you exactly which replica wrote it -- useful when running the canary demo, where you'll see both v1 and v2 pods appearing across entries:
 
 ```json
-{"level": "INFO", "msg": "hello", "version": "v1", "pod": "backend-v1-d798ffdf7-zn8df"}
-{"level": "INFO", "msg": "hello", "version": "v2", "pod": "backend-v2-686c747854-fsmmm"}
+{"id": "f47ac10b-...", "level": "INFO", "msg": "hello", "version": "v1", "pod": "backend-v1-d798ffdf7-zn8df"}
+{"id": "a1b2c3d4-...", "level": "INFO", "msg": "hello", "version": "v2", "pod": "backend-v2-686c747854-fsmmm"}
 ```
 
 ## Observability

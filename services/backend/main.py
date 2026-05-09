@@ -1,4 +1,4 @@
-import os, random, datetime, json
+import os, random, datetime, json, uuid
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 from prometheus_fastapi_instrumentator import Instrumentator
@@ -49,24 +49,47 @@ async def get_data():
 
 @app.post("/log")
 async def create_log(entry: LogEntry):
+    entry_id = str(uuid.uuid4())
     payload = {
+        "id": entry_id,
         "level": entry.level,
         "msg": entry.msg,
         "version": VERSION,
         "timestamp": datetime.datetime.utcnow().isoformat(),
         "pod": os.getenv("HOSTNAME", "unknown"),
     }
-    r.rpush("logs", json.dumps(payload))
-    return {"stored": r.llen("logs"), "entry": payload}
+    # store as individual hash key; also track insertion order in an index list
+    r.set(f"log:{entry_id}", json.dumps(payload))
+    r.rpush("log:index", entry_id)
+    total = r.llen("log:index")
+    return {"stored": total, "entry": payload}
 
 
 @app.get("/log")
 async def get_logs():
-    logs = [json.loads(l) for l in r.lrange("logs", 0, -1)]
+    ids = r.lrange("log:index", 0, -1)
+    logs = []
+    for entry_id in ids:
+        raw = r.get(f"log:{entry_id}")
+        if raw:
+            logs.append(json.loads(raw))
     return {"logs": logs, "total": len(logs)}
+
+
+@app.delete("/log/{entry_id}")
+async def delete_log(entry_id: str):
+    key = f"log:{entry_id}"
+    if not r.exists(key):
+        raise HTTPException(status_code=404, detail=f"Log entry {entry_id} not found")
+    r.delete(key)
+    r.lrem("log:index", 0, entry_id)
+    return {"deleted": entry_id}
 
 
 @app.delete("/log")
 async def clear_logs():
-    r.delete("logs")
+    ids = r.lrange("log:index", 0, -1)
+    if ids:
+        r.delete(*[f"log:{i}" for i in ids])
+    r.delete("log:index")
     return {"status": "cleared"}
